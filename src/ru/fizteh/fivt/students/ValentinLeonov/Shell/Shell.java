@@ -1,6 +1,9 @@
 package ru.fizteh.fivt.students.ValentinLeonov.Shell;
 
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.*;
 import java.util.Scanner;
 
@@ -24,15 +27,15 @@ public class Shell {
             scanner.close();
         }
     }
-    
+
     private void executeSingleCommand(String command) throws SException {
         if (command.trim().isEmpty()) {
             return;
         }
-        
+
         String[] args = command.trim().split("[\t ]+");
         String commandName = args[0];
-        
+
         if (commandName.equals("cd")) {
             cd(args);
 
@@ -46,19 +49,40 @@ public class Shell {
             remove(args);
 
         } else if (commandName.equals("cp")) {
-            copyOrMove(args, false);
+            cp(args);
 
         } else if (commandName.equals("mv")) {
-            copyOrMove(args, true);
+            mv(args);
 
         } else if (commandName.equals("dir")) {
             dir(args);
+
+        } else if (commandName.equals("ls")) {
+            ls(args);
 
         } else if (commandName.equals("exit")) {
             System.exit(0);
 
         } else {
             throw new SException("shell", "no such command");
+        }
+    }
+
+    private static void ls(String[] args) {
+        String command = "ls";
+        if (args.length != 1) {
+            System.err.println(command + ": too much arguments");
+            return;
+        }
+        try {
+            File currentDirectory = new File(System.getProperty("user.dir"));
+            for (String i : currentDirectory.list()) {
+                System.out.println(i);
+            }
+        } catch (SecurityException e) {
+            System.err.println(command
+                    + ": cannot get the list of files: access denied");
+            return;
         }
     }
 
@@ -97,6 +121,29 @@ public class Shell {
             System.out.print(beginning);
             System.out.flush();
         }
+    }
+
+    private void mv(String[] args) {
+        if (3 != args.length) {
+            System.err.println("incorrect arguments");
+            return;
+        }
+
+        File fl = new File(System.getProperty("user.dir") + "/" + args[1]);
+        if (!fl.exists()) {
+            System.err.println("There is no such file or directory: " + args[1]);
+            return;
+        }
+
+        File nfl = new File(System.getProperty("user.dir") + "/" + args[2]);
+        if (nfl.exists() && nfl.isDirectory()) {
+            nfl = new File(nfl.getAbsolutePath() + "/" + fl.getName());
+        }
+        if (!fl.renameTo(nfl)) {
+            System.err.println("Can't move this file: " + args[1]);
+            return;
+        }
+        return;
     }
 
     private void cd(String[] args) throws SException {
@@ -162,99 +209,119 @@ public class Shell {
     }
 
     private void remove(String[] args) throws SException {
-        try {
-            checkLen(args[0], args.length - 1, 1);
-            Path pathToRemove = directory.toPath().resolve(args[1]).normalize();
-            if (!Files.exists(pathToRemove)) {
-                throw new SException(args[0], "Cannot be removed: File does not exist");
-            }
-            if (directory.toPath().normalize().startsWith(pathToRemove)) {
-                throw new SException(args[0], "\'" + args[1] +
-                        "\': Cannot be removed: First of all, leave this directory");
-            }
-
-            File fileToRemove = new File(pathAppend(args[1]));
-            File[] filesToRemove = fileToRemove.listFiles();
-            if (filesToRemove != null) {
-                for (File file : filesToRemove) {
-                    try {
-                        String[] toRemove = new String[2];
-                        toRemove[0] = args[0];
-                        toRemove[1] = file.getPath();
-                        remove(toRemove);
-                    } catch (Exception exception) {
-                        throw new SException(args[0], "\'" + file.getCanonicalPath()
-                                + "\' : File cannot be removed: " + exception.getMessage() + " ");
-                    }
-                }
-            }
-            try {
-                if (!Files.deleteIfExists(pathToRemove)) {
-                    throw new SException(args[0], "\'" + fileToRemove.getCanonicalPath()
-                            + "\' : File cannot be removed ");
-                }
-            } catch (DirectoryNotEmptyException exception) {
-                throw new SException(args[0], "\'" + fileToRemove.getCanonicalPath() + "\' : Directory not empty");
-            }
-        } catch (SException se) {
-            throw se;
-        } catch (AccessDeniedException exception) {
-            throw new SException(args[0], "Access denied");
-        } catch (Exception exception) {
-            throw new SException(args[0], exception.getMessage());
+        if ((args.length > 3) | (args.length < 2)) {
+            System.err.println("unknown arguments");
+            return;
         }
+        if (args.length == 3 && !args[1].equals("-r")) {
+            System.err.println("incorrect arguments");
+            return;
+        }
+        File fl = new File(System.getProperty("user.dir") + "/" + args[args.length - 1]);
+        if (!fl.exists()) {
+            System.err.println("There is no such file or directory: " +
+                    System.getProperty("user.dir") + "/" + args[args.length - 1]);
+            return;
+        }
+
+        if (fl.isDirectory() && (args.length == 2 | (args.length == 3 && !args[1].equals("-r")))) {
+            System.err.println("This is a directory: " + args[args.length - 1]);
+            return;
+        }
+        if (fl.isDirectory()) {
+            if (fl.listFiles() != null) {
+                try {
+                    for (File file : fl.listFiles()) {
+                        String[] tmp = {"rm", "-r", args[args.length - 1] + "/" + file.getName()};
+                        remove(tmp);
+                    }
+                } catch (NullPointerException e) {
+                    System.err.println(e.getMessage());
+                    return;
+                }
+            }
+        }
+
+        if (!fl.delete()) {
+            System.err.println("can't remove: " + args[args.length - 1]);
+            return;
+        }
+
     }
 
-    private void copyOrMove(String[] args, boolean moveOrCopy) throws SException {
-        String commandName;
-        commandName = moveOrCopy ? "move" : "copy";
-        try {
-            checkLen(args[0], args.length - 1, 2);
-            Path curDir = Paths.get(directory.getCanonicalPath());
-            Path srcPath = curDir.resolve(args[1]).normalize();
-            Path dstPath = curDir.resolve(args[2]).normalize();
+    private void cp(String[] args) {
+        if (args.length > 4 | args.length < 2) {
+            System.err.println("incorrect arguments");
+            return;
+        }
+        if (args.length == 4 && !args[1].equals("-r")) {
+            System.err.println("incorrect arguments");
+            return;
+        }
+        File source = new File(System.getProperty("user.dir") + "/" + args[args.length - 2]);
+        File path = new File(System.getProperty("user.dir") + "/" + args[args.length - 1]);
+        if (source.equals(path)) {
+            System.err.println("this files are equal");
+            return;
+        }
 
-            if (!Files.exists(srcPath)) {
-                throw new SException(commandName, args[1] + ": file not exist");
-            }
+        if (source.isDirectory() && args.length == 3) {
+            System.err.println("This is a directory: " + args[args.length - 2]);
+            return;
+        }
 
-            if (srcPath.equals(dstPath)) {
-                throw new SException(commandName, "It's the same file");
-            }
+        if (source.isDirectory() && path.isFile()) {
+            System.err.println("can't copy directory to the file");
+            return;
+        }
 
-            if (Files.isDirectory(dstPath)) {
-                dstPath = dstPath.resolve(srcPath.getFileName()).normalize();
-            } else if (Files.isDirectory(srcPath) && Files.exists(dstPath)) {
-                throw new SException(commandName, "File that isn\'t directory.");
-            }
+        if (path.exists() && path.isDirectory()) {
+            path = new File(path.getAbsolutePath() + "/" + source.getName());
+        }
 
-            if (dstPath.startsWith(srcPath)) {
-                throw new SException(commandName, "Cannot move/copy file: cycle copy:"
-                        + srcPath.toString() + " -> " + dstPath.toString());
-            }
+        if (!source.exists()) {
+            System.err.println("There is no such file or directory: " + args[args.length - 2]);
+            return;
+        }
+        copy(source.getAbsolutePath(), path.getAbsolutePath());
+    }
 
-            if (moveOrCopy) {
-                Files.move(srcPath, dstPath, StandardCopyOption.REPLACE_EXISTING);
-            } else {
-                Files.copy(srcPath, dstPath, StandardCopyOption.REPLACE_EXISTING);
-            }
+    private void copy(String now, String to) throws NullPointerException {
+        File source = new File(now);
+        File path = new File(to);
 
-            File[] sourceEntries = srcPath.toFile().listFiles();
-            if (sourceEntries != null) {
-                for (File entry : sourceEntries) {
-                    String name = entry.getName();
-                    String[] nw = new String[3];
-                    nw[0] = args[0];
-                    nw[1] = srcPath.resolve(name).normalize().toString();
-                    nw[2] = dstPath.resolve(name).normalize().toString();
-                    copyOrMove(nw, moveOrCopy);
+        if (source.isDirectory()) {
+            if (!path.exists()) {
+                if (!path.mkdir()) {
+                    System.err.println("Can't create directory: " + to);
+                    return;
                 }
             }
-        } catch (SException se) {
-            throw se;
-        } catch (Exception exception) {
-            throw new SException(commandName, exception.getMessage());
+            if (source.listFiles() != null) {
+                try {
+                    for (File file : source.listFiles()) {
+                        copy(file.getAbsolutePath(), path.getAbsolutePath() + "/" + file.getName());
+                    }
+                } catch (NullPointerException e) {
+                    System.err.println(e.getMessage());
+                    return;
+                }
+            }
+            return;
         }
+
+
+        try {
+            FileReader fr = new FileReader(source);
+            FileWriter fw = new FileWriter(path);
+            char[] buf = new char[1];
+            while (fr.read(buf) > 0) {
+                fw.write(buf);
+            }
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
+
     }
 
     private String pathAppend(String path) {
