@@ -13,7 +13,7 @@ public class Main {
                 shell.executeCommands(commands.toString());
             } catch (SException exception) {
                 System.err.println(exception);
-                System.exit(0);
+                System.exit(1);
             }
 
         } else {
