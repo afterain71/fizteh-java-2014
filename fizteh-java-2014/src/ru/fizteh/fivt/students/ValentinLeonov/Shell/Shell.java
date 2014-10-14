@@ -80,8 +80,7 @@ public class Shell {
                 System.out.println(i);
             }
         } catch (SecurityException e) {
-            System.err.println(command
-                    + ": cannot get the list of files: access denied");
+            System.err.println(command + ": cannot get the list of files: access denied");
             return;
         }
     }
@@ -146,22 +145,36 @@ public class Shell {
         return;
     }
 
-    private void cd(String[] args) throws SException {
-        try {
-            checkLen(args[0], args.length - 1, 1);
-            File tmpFile = new File(pathAppend(args[1]));
-            if (tmpFile.isDirectory()) {
-                directory = tmpFile;
-            } else if (!tmpFile.exists()) {
-                throw new SException(args[0], "\'" + args[1] + "\': no such file or directory");
-            } else {
-                throw new SException(args[0], "\'" + args[1] + "\': not a directory");
-            }
-        } catch (SException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new SException(args[0], exception.getMessage());
+    private void cd(String[] args) {
+        if (args.length != 2) {
+            System.err.println("incorrect arguments");
+            return;
         }
+
+        if (args[1].equals(".")) {
+            return;
+        }
+
+        if (args[1].equals("..")) {
+            try {
+                File temp = new File(System.getProperty("user.dir"));
+                File fl = new File(temp.getParent());
+                directory = fl;
+                System.setProperty("user.dir", fl.getAbsolutePath());
+            } catch (NullPointerException e) {
+                System.err.println(e.getMessage());
+                return;
+            }
+        } else {
+            File fl = new File(System.getProperty("user.dir") + "/" + args[1]);
+            directory = fl;
+            if (!fl.isDirectory()) {
+                System.err.println("there is no such file or directory: " + args[1]);
+                return;
+            }
+            System.setProperty("user.dir", fl.getAbsolutePath());
+        }
+        return;
     }
 
     private void pwd(String[] args) throws SException {

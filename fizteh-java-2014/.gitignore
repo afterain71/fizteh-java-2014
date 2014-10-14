@@ -1,0 +1,22 @@
+*.class
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.war
+*.ear
+
+hs_err_pid*
+
+.idea
+*.iml
+out
+jars
+/bin
+
+.classpath
+.project
+
+.settings
+.checkstyle
